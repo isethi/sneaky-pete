@@ -89,195 +89,14 @@ RedisMessageHandler::~RedisMessageHandler()
 JsonDataPtr RedisMessageHandler::handle_message(const GuestInput & input) {
     if (input.method_name == "prepare")
     {
-        NOVA_LOG_INFO("Entering prepare call.");
-        if (app_status->is_installed())
-        {
-            NOVA_LOG_ERROR("Redis already installed");
-            return JsonData::from_string("prepare fail:"
-                                         "Redis already installed");
-        }
-        app_status->begin_install();
-        NOVA_LOG_INFO("Creating local.conf contents");
-        const auto root_password = input.args->get_string("root_password");
-        std::string local_config =
-        std::string(boost::str(boost::format("requirepass %1%\n"
-                                                 "rename-command CONFIG %2%\n"
-                                                 "rename-command MONITOR %3%")
-                                                 % root_password
-                                                 % get_uuid()
-                                                 % get_uuid()));
-        const auto packages = get_packages_argument(input.args);
-        const auto config_contents = input.args->get_string("config_contents");
-        NOVA_LOG_INFO("Installing packages.")
-        BOOST_FOREACH(const string & package, packages)
-        {
-            NOVA_LOG_INFO("Installing...");
-            try
-            {
-                apt->install(package.c_str(), 500);
-            }
-            catch (std::exception & e)
-            {
-                NOVA_LOG_ERROR("Unable to install redis-server");
-                app_status->end_failed_install();
-                return JsonData::from_string("prepare fail:"
-                                               "Error installing redis-server");
-            }
-            NOVA_LOG_INFO("Installed...");
-        }
-        NOVA_LOG_INFO("Removing the redis conf file.");
-        if (system("sudo rm /etc/redis/redis.conf") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to remove redis config file.");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error removing redis config file.");
-        }
-        NOVA_LOG_INFO("Chmoding /etc/redis to 777.");
-        if (system("sudo chmod -R 777 /etc/redis") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to chmod /etc/redis to 777");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error chmoding /etc/redis "
-                                         "to 777.");
-        }
-        NOVA_LOG_INFO("Creating new config file.");
-        ofstream fd;
-        NOVA_LOG_INFO("Opening redis config file.");
-        fd.open("/etc/redis/redis.conf");
-        NOVA_LOG_INFO("Writing config contents.");
-        NOVA_LOG_DEBUG(config_contents);
-        if (fd.is_open())
-        {
-            NOVA_LOG_INFO("Config file is open.");
-            fd << config_contents;
-            NOVA_LOG_INFO("Closing config file.");
-            fd.close();
-            fd.clear();
-        }
-        else
-        {
-            NOVA_LOG_ERROR("Config file is not open.");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error cannot write redis.conf.");
-        }
-        if (system("sudo chmod 644 /etc/redis/redis.conf") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to revert file permissions.");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error unable to reset redis.conf "
-                                         "file permissions.");
-        }
-        NOVA_LOG_INFO("Creating /etc/redis/conf.d");
-        if (system("mkdir /etc/redis/conf.d") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to create redis conf.d");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error unable to "
-                                         "create redis conf.d");
-        }
-        NOVA_LOG_INFO("Removing /etc/redis/conf.d/local.conf");
-        if (system("rm /etc/redis/conf.d/local.conf") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to remove local.conf");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error unable to remove local.conf");
-        }
-        NOVA_LOG_INFO("Creating new /etc/redis/conf.d/local.conf");
-        if (system("touch /etc/redis/conf.d/local.conf") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to create local.conf");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail :"
-                                         "Error unable to create local.conf");
-        }
-        NOVA_LOG_INFO("Opening /etc/redis/conf.d/local.conf for writing");
-        fd.open("/etc/redis/conf.d/local.conf");
-        if (fd.is_open())
-        {
-            fd << local_config;
-            fd.close();
-            fd.clear();
-        }
-        else
-        {
-            NOVA_LOG_ERROR("Unable to open /etc/redis/conf.d/local.conf");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error unable to open "
-                                         "/etc/redis/conf.d/local.conf "
-                                         "for writing.");
-        }
-        NOVA_LOG_INFO("Chmoding /etc/redis/conf.d/local.conf to 644");
-        if (system("sudo chmod 644 /etc/redis/conf.d/local.conf") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to chmod /etc/redis/conf.d/local.conf"
-                           "to 644");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error unable to revert file perms"
-                                         "for /etc/redis/conf.d/local.conf");
-        }
-        NOVA_LOG_INFO("Chmoding  /etc/redis to 755");
-        if (system("sudo chmod 755 /etc/redis") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to chmod -R /etc/redis to 755");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error unable to return "
-                                         "/etc/redis back to 755 perms");
-        }
-        if (system("sudo chmod 755 /etc/redis/conf.d") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to chmod -R /etc/redis/conf.d to 755");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error unable to return "
-                                         "/etc/redis/conf.d back to 755 perms");
-        }
-        NOVA_LOG_INFO("Chowing /etc/redis to root:root");
-        if (system("sudo chown -R root:root /etc/redis") == -1)
-        {
-            NOVA_LOG_ERROR("Unable to chown /etc/redis to root:root");
-            app_status->end_failed_install();
-            return JsonData::from_string("prepare fail:"
-                                         "Error unable to chown "
-                                         "/etc/redis to root:root");
-        }
-        NOVA_LOG_INFO("Connecting to redis instance.");
-        nova::redis::Client client = nova::redis::Client(SOCKET_NAME,
-                                                         REDIS_PORT,
-                                                         REDIS_AGENT_NAME,
-                                                         DEFAULT_REDIS_CONFIG);
-        NOVA_LOG_INFO("Stopping redis instance.");
-        if (client.control->stop() != 0)
-        {
-            NOVA_LOG_INFO("Unable to stop redis instance.");
-        }
-        NOVA_LOG_INFO("Starting redis instance.");
-        if (client.control->start() != 0)
-        {
-            NOVA_LOG_ERROR("Unable to start redis instance!");
-            app_status->end_failed_install();
-            return JsonData::from_string("Unable to start redis instance!");
-        }
-        app_status->end_install_or_restart();
-        NOVA_LOG_INFO("End of prepare call.");
+        prepare_handler->prepare(input);
         return JsonData::from_string("prepare ok");
     }
     else if (input.method_name == "restart")
     {
         NOVA_LOG_INFO("Entering restart call.");
         NOVA_LOG_INFO("Connecting to redis instance.");
-        nova::redis::Client client(SOCKET_NAME,
-                                   REDIS_PORT,
-                                   REDIS_AGENT_NAME,
-                                   DEFAULT_REDIS_CONFIG);
+        nova::redis::Client client();
         NOVA_LOG_INFO("Stopping redis instance.");
         if (client.control->stop() != 0)
         {
@@ -385,10 +204,7 @@ JsonDataPtr RedisMessageHandler::handle_message(const GuestInput & input) {
             NOVA_LOG_INFO("Unable to change ownership of conf.d to root:root");
         }
         NOVA_LOG_INFO("Connecting to redis");
-        nova::redis::Client client(SOCKET_NAME,
-                                   REDIS_PORT,
-                                   REDIS_AGENT_NAME,
-                                   DEFAULT_REDIS_CONFIG);
+        nova::redis::Client client();
         client.config_set("requirepass", obj->get_string("password"));
         return JsonData::from_string("change_passwords ok");
     }
@@ -396,10 +212,7 @@ JsonDataPtr RedisMessageHandler::handle_message(const GuestInput & input) {
     {
         NOVA_LOG_INFO("Entering start_db_with_conf_changes call.");
         NOVA_LOG_INFO("Connecting to redis instance.");
-        nova::redis::Client client(SOCKET_NAME,
-                                   REDIS_PORT,
-                                   REDIS_AGENT_NAME,
-                                   DEFAULT_REDIS_CONFIG);
+        nova::redis::Client client();
         const auto config_contents = input.args->get_string("config_contents");
         if (!client.config->write_new_config(config_contents))
         {
@@ -419,10 +232,7 @@ JsonDataPtr RedisMessageHandler::handle_message(const GuestInput & input) {
     {
         NOVA_LOG_INFO("Entering stop_db call.");
         NOVA_LOG_INFO("Connecting to redis instance.");
-        nova::redis::Client client(SOCKET_NAME,
-                                   REDIS_PORT,
-                                   REDIS_AGENT_NAME,
-                                   DEFAULT_REDIS_CONFIG);
+        nova::redis::Client client();
         NOVA_LOG_INFO("Stopping redis instance.");
         if (client.control->stop() != 0)
         {

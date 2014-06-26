@@ -10,11 +10,20 @@
 #include <string>
 
 
+// Forward declaration
+namespace nova { namespace guest { namespace common {
+    class PrepareHandler;
+}}}
+
 namespace nova { namespace datastores {
 
+
     class DatastoreApp {
-        public:
+        friend class PrepareHandler;  // Let prepare handler call this method.
+
+        protected:
             virtual void prepare(
+                const boost::optional<std::string> & root_password,
                 const std::string & config_contents,
                 const boost::optional<std::string> & overrides,
                 boost::optional<nova::guest::backup::BackupRestoreInfo> restore

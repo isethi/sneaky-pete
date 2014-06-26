@@ -4,6 +4,7 @@
 #include "nova/guest/guest.h"
 #include "nova/guest/redis/status.h"
 #include "nova/guest/monitoring/monitoring.h"
+#include "nova/guest/common/PrepareHandler.h"
 
 namespace nova { namespace guest {
 

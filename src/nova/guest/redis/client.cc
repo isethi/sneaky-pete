@@ -271,8 +271,11 @@ void Client::_find_config_command()
 
 Client::Client(std::string host, std::string port,
         std::string client_name, std::string config_file) :
-        _port(port), _host(host), _client_name(client_name),
-        _config_file(config_file), _config_command(COMMAND_CONFIG)
+        _port(port.get_value_or(REDIS_PORT)),
+        _host(SOCKET_NAME),
+        _client_name(REDIS_AGENT_NAME),
+        _config_file(DEFAULT_REDIS_CONFIG),
+        _config_command(COMMAND_CONFIG)
 {
     config = new Config(config_file);
     _find_config_command();
